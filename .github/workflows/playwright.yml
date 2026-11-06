@@ -1,0 +1,91 @@
+name: Playwright E2E
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      repeat_each:
+        description: 'Run every test N times (stability check, retries disabled when > 1)'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playwright-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: E2E (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      # Optional: set the BASE_URL repository variable (and credential secrets) to target a
+      # deployed EXELYNT environment. When empty, the bundled reference app is started.
+      BASE_URL: ${{ vars.BASE_URL }}
+      LEARNER_EMAIL: ${{ secrets.LEARNER_EMAIL }}
+      LEARNER_PASSWORD: ${{ secrets.LEARNER_PASSWORD }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Run Playwright tests
+        run: |
+          REPEAT="${{ github.event.inputs.repeat_each || '1' }}"
+          if [ "$REPEAT" -gt 1 ]; then
+            npx playwright test --repeat-each="$REPEAT" --retries=0
+          else
+            npx playwright test
+          fi
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_number }}-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload JUnit results and failure traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}-${{ github.run_attempt }}
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Publish summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f test-results/junit.xml ]; then
+            node -e '
+              const xml = require("fs").readFileSync("test-results/junit.xml", "utf8");
+              const attr = (n) => Number((xml.match(new RegExp("<testsuites[^>]*\\s" + n + "=\"(\\d+)\"")) || [])[1] || 0);
+              const tests = attr("tests"), failures = attr("failures"), skipped = attr("skipped"), errors = attr("errors");
+              const passed = tests - failures - skipped - errors;
+              const rate = tests ? ((passed / tests) * 100).toFixed(1) : "0.0";
+              console.log(`### Playwright results\n\n| Total | Passed | Failed | Skipped | Pass rate |\n|---|---|---|---|---|\n| ${tests} | ${passed} | ${failures + errors} | ${skipped} | ${rate}% |`);
+            ' >> "$GITHUB_STEP_SUMMARY"
+          fi
