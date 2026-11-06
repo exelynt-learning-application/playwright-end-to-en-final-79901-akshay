@@ -1,0 +1,760 @@
+# Complete EXELYNT Playwright Automation Framework – Detailed Project Plan
+
+The goal is to build a complete, professional Playwright automation framework for the EXELYNT application. It should cover five important application workflows, use reusable components, run automatically through GitHub Actions, and generate test reports.
+
+The framework should be designed so that another developer can easily understand, execute, maintain, and extend it.
+
+## 1. Project objectives
+
+The framework must automate these five major workflows:
+
+| No. | Module                       | Main functionality                    |
+| --- | ---------------------------- | ------------------------------------- |
+| 1   | Learner Registration & Login | Register, validate and log in         |
+| 2   | Course Browsing & Enrollment | Search, view and enroll in courses    |
+| 3   | Lesson & Progress            | Complete lessons and verify progress  |
+| 4   | Assessment & Score           | Attempt assessments and verify scores |
+| 5   | Admin Course Creation        | Create and save course drafts         |
+
+Additional requirements:
+
+- Page Object Model (POM).
+- Reusable fixtures.
+- Authentication using `storageState`.
+- Test data management.
+- Independent test execution.
+- CI pipeline.
+- HTML test reports.
+- Documentation and test coverage plan.
+
+## 2. Project folder structure
+
+Create the following folder structure:
+
+```
+exelynt-playwright/
+│
+├── tests/
+│   ├── auth/
+│   │   ├── registration.spec.js
+│   │   └── login.spec.js
+│   │
+│   ├── courses/
+│   │   ├── course-browsing.spec.js
+│   │   └── enrollment.spec.js
+│   │
+│   ├── learning/
+│   │   └── lesson-progress.spec.js
+│   │
+│   ├── assessments/
+│   │   └── assessment-score.spec.js
+│   │
+│   └── admin/
+│       └── course-creation.spec.js
+│
+├── pages/
+│   ├── LoginPage.js
+│   ├── RegistrationPage.js
+│   ├── CourseCatalogPage.js
+│   ├── EnrollmentPage.js
+│   ├── LearningPage.js
+│   ├── AssessmentPage.js
+│   └── AdminCoursePage.js
+│
+├── fixtures/
+│   └── test-fixtures.js
+│
+├── utils/
+│   ├── courseHelper.js
+│   └── testDataHelper.js
+│
+├── data/
+│   ├── users.json
+│   └── courses.json
+│
+├── auth/
+│   └── .gitkeep
+│
+├── .github/
+│   └── workflows/
+│       └── playwright.yml
+│
+├── playwright.config.js
+├── package.json
+├── .gitignore
+├── README.md
+└── TEST_PLAN.md
+```
+
+Folder responsibilities:
+
+- `tests/`: Contains all test scenarios and assertions.
+- `pages/`: Contains page objects, locators and reusable page actions.
+- `fixtures/`: Manages browser pages, authentication and test setup.
+- `utils/`: Contains reusable helper functions.
+- `data/`: Stores test users and course information.
+- `auth/`: Stores authentication state locally when needed.
+- `.github/workflows/`: Contains automated CI configuration.
+
+## 3. Technology installation
+
+Use Node.js and Playwright Test.
+
+Run these commands:
+
+```
+mkdir exelynt-playwright
+cd exelynt-playwright
+
+npm init -y
+
+npm install -D @playwright/test
+npm install -D @axe-core/playwright
+
+npx playwright install
+```
+
+Add these scripts to `package.json`:
+
+```
+{
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:report": "npx playwright show-report"
+  }
+}
+```
+
+## 4. Playwright configuration
+
+Create `playwright.config.js`.
+
+```
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests',
+
+  fullyParallel: true,
+
+  retries: process.env.CI ? 1 : 0,
+
+  workers: process.env.CI ? 2 : undefined,
+
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }]
+  ],
+
+  use: {
+    baseURL: process.env.BASE_URL || 'https://staging.exelynt.com',
+
+    headless: true,
+
+    screenshot: 'only-on-failure',
+
+    trace: 'retain-on-failure',
+
+    video: 'retain-on-failure'
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome']
+      }
+    }
+  ]
+});
+```
+
+Why this configuration?
+
+- `fullyParallel`: Allows independent tests to execute simultaneously.
+- `retries`: Retries failed tests in CI.
+- `workers`: Controls parallel execution.
+- `baseURL`: Allows the same tests to run against staging or development.
+- `screenshot`: Captures screenshots when tests fail.
+- `trace`: Helps developers investigate failures.
+
+Do not use retries to hide unstable tests; investigate first-attempt failures as well.
+
+## 5. Flow 1 – Learner Registration and Login
+
+Required flow 1
+
+[Educational platform web app by K&Z Design on Dribbble](https://images.openai.com/static-rsc-4/dcZZanAlDxVcZ04yr5xkf8DkwiZZdeSSPzYLtVvgR1bFXzqeS4l9LuDNLpa0W2pKQgaJ-PIHR71Q-x2ndD2vPa79ZggcXlZU3DsvJZl6e1vd2kAKsLWj4eLOWMLsHT-GJ3k62ceO53d65mdXDF75oAGGHe0YYC3nZq9kiQi7rxs?purpose=inline)
+
+Objective: Verify that a new learner can register and log in successfully.
+
+Test scenarios:
+
+| Test case                     | Expected result           |
+| ----------------------------- | ------------------------- |
+| Open registration page        | Registration form appears |
+| Enter valid details           | Account is created        |
+| Submit empty form             | Validation appears        |
+| Enter invalid email           | Email validation appears  |
+| Register duplicate email      | Appropriate error appears |
+| Login with valid credentials  | Student dashboard opens   |
+| Login with incorrect password | Error message appears     |
+
+Page Object – `pages/RegistrationPage.js`
+
+```
+export class RegistrationPage {
+  constructor(page) {
+    this.page = page;
+    this.name = page.getByLabel('Full Name');
+    this.email = page.getByLabel('Email');
+    this.password = page.getByLabel('Password');
+    this.registerButton =
+      page.getByRole('button', { name: 'Register' });
+  }
+
+  async register(name, email, password) {
+    await this.name.fill(name);
+    await this.email.fill(email);
+    await this.password.fill(password);
+    await this.registerButton.click();
+  }
+}
+```
+
+Test – `tests/auth/registration.spec.js`
+
+```
+import { test, expect } from '@playwright/test';
+import { RegistrationPage } from '../../pages/RegistrationPage.js';
+
+test('Learner can register successfully', async ({ page }) => {
+  const registration = new RegistrationPage(page);
+
+  await page.goto('/register');
+
+  await registration.register(
+    'Test Learner',
+    `learner_${Date.now()}@example.com`,
+    'Test@12345'
+  );
+
+  await expect(page.getByText(/success/i)).toBeVisible();
+});
+```
+
+The actual form labels and success messages must be matched to the EXELYNT application.
+
+## 6. Flow 2 – Course Browsing and Enrollment
+
+Required flow 2
+
+[SaaS LMS Course Listing Page UI/UX Design by Chapter24 | Layers](https://images.openai.com/static-rsc-4/NboudJG8O9yKZPKrEpy1TadNozyLYalFaYEFyXbbQu8d7yYBRvfjeREQSvQZfVQrDF5GspauZzoHwA1wgX5Ktpm8iqb7mWVI7a3nNJHf0mdBOogvoF6rJ6tpxL06YbC5T224xVKEG2nxC-ayiJX-Hn4DYE1K7atOnXNy9S85p-Y?purpose=inline)
+
+Objective: Verify that students can browse courses, search for courses, view course details and enroll.
+
+Test scenarios:
+
+1. Open the course catalog.
+2. Verify the course list is visible.
+3. Search for a course by title.
+4. Open a course details page.
+5. Verify course title and description.
+6. Click the enrollment button.
+7. Verify successful enrollment.
+8. Verify the course appears in My Learning.
+
+Page Object – `pages/CourseCatalogPage.js`
+
+```
+export class CourseCatalogPage {
+  constructor(page) {
+    this.page = page;
+
+    this.searchBox = page.getByPlaceholder('Search courses');
+
+    this.courseCards = page.locator('.course-card');
+  }
+
+  async searchCourse(title) {
+    await this.searchBox.fill(title);
+  }
+
+  async openCourse(title) {
+    await this.page
+      .getByText(title, { exact: true })
+      .click();
+  }
+
+  async getVisibleCourseCount() {
+    return await this.courseCards.count();
+  }
+}
+```
+
+Test – `tests/courses/course-browsing.spec.js`
+
+```
+import { test, expect } from '@playwright/test';
+import { CourseCatalogPage } from '../../pages/CourseCatalogPage.js';
+
+test('Student can search and open a course', async ({ page }) => {
+  const courses = new CourseCatalogPage(page);
+
+  await page.goto('/courses');
+
+  await courses.searchCourse('JavaScript');
+
+  await expect(
+    page.getByText('JavaScript', { exact: true })
+  ).toBeVisible();
+
+  await courses.openCourse('JavaScript');
+});
+```
+
+Expected result: Students should be able to search for courses and open the correct course details.
+
+## 7. Flow 3 – Completing Lessons and Viewing Progress
+
+Required flow 3
+
+[Tcourse - Online Course Dashboard (Course Page) by Pixelz on Dribbble](https://images.openai.com/static-rsc-4/e9Vuuq86cExXUFHz_05q2d4BZmi6S1co4Hi40x6Au76Yv8UwvIUdLb7yO69Q16NZONomvmfHJH5OXMOGK-XfvI3hEypOqNyFBFK1gE6832VVWei_ZrCVtyKO-IX28rZcNh5XwTwa8pUCMON-rP6dW5ApT1ILDt0xW3r1-6Rz3Mc?purpose=inline)
+
+Objective: Verify that students can access lessons, complete them and see updated course progress.
+
+Test scenarios:
+
+- Open an enrolled course.
+- Open Week 1.
+- Open the first lesson.
+- Verify lesson content is displayed.
+- Complete the lesson.
+- Navigate to the next lesson.
+- Verify completed lesson status.
+- Verify course progress percentage.
+
+Page Object – `pages/LearningPage.js`
+
+```
+export class LearningPage {
+  constructor(page) {
+    this.page = page;
+
+    this.completeButton =
+      page.getByRole('button', { name: /complete lesson/i });
+
+    this.progress =
+      page.locator('[data-testid="course-progress"]');
+  }
+
+  async completeLesson() {
+    await this.completeButton.click();
+  }
+
+  async getProgress() {
+    return await this.progress.textContent();
+  }
+}
+```
+
+Test – `tests/learning/lesson-progress.spec.js`
+
+```
+import { test, expect } from '@playwright/test';
+import { LearningPage } from '../../pages/LearningPage.js';
+
+test('Student can complete a lesson', async ({ page }) => {
+  const learning = new LearningPage(page);
+
+  await page.goto('/my-learning');
+
+  await page.getByText('JavaScript', { exact: true }).click();
+
+  await learning.completeLesson();
+
+  await expect(
+    page.getByText(/completed/i)
+  ).toBeVisible();
+});
+```
+
+Expected result: The lesson completion status and course progress should update correctly.
+
+## 8. Flow 4 – Assessment and Score Verification
+
+Required flow 4
+
+[Submitting a quiz](https://images.openai.com/static-rsc-4/gLV9pGvjeuoN4RjaHZSnrz-ITF_BDpqE4CdUnLpw6vj1YwIPvCOhLfKBBAaoJsDgNqEkuemJ8W2BRMpLVDqqlvruU8XcvdMwwIYUpc6wRQjUat4EROJUliTSc4u0Mvj6-77dsf30WscmaMzxQjVzZzvTRJLzzBYcpoWP5XCDDEk?purpose=inline)
+
+Objective: Verify that students can attempt assessments and view their scores.
+
+Test scenarios:
+
+1. Open the assessment section.
+2. Select an available assessment.
+3. Verify assessment questions.
+4. Select answers.
+5. Submit the assessment.
+6. Verify the score.
+7. Verify pass or fail status.
+8. Verify assessment history.
+
+Page Object – `pages/AssessmentPage.js`
+
+```
+export class AssessmentPage {
+  constructor(page) {
+    this.page = page;
+
+    this.submitButton =
+      page.getByRole('button', { name: 'Submit' });
+
+    this.score =
+      page.locator('[data-testid="assessment-score"]');
+  }
+
+  async selectAnswer(answer) {
+    await this.page.getByLabel(answer).check();
+  }
+
+  async submitAssessment() {
+    await this.submitButton.click();
+  }
+
+  async getScore() {
+    return await this.score.textContent();
+  }
+}
+```
+
+Test – `tests/assessments/assessment-score.spec.js`
+
+```
+import { test, expect } from '@playwright/test';
+import { AssessmentPage } from '../../pages/AssessmentPage.js';
+
+test('Student can submit an assessment and view score', async ({ page }) => {
+  const assessment = new AssessmentPage(page);
+
+  await page.goto('/assessments');
+
+  await page.getByText('JavaScript Assessment').click();
+
+  await assessment.selectAnswer('Option A');
+
+  await assessment.submitAssessment();
+
+  await expect(
+    page.getByTestId('assessment-score')
+  ).toBeVisible();
+});
+```
+
+Expected result: The student should receive a score and the correct assessment status.
+
+## 9. Flow 5 – Admin Course Creation
+
+Required flow 5
+
+[Add New Course - Education Management System by Mahmudul Hasan Manik for Panze - UX Design Studio on Dribbble](https://images.openai.com/static-rsc-4/2x23y81Lf8goUBJpPtWz7WYfktumfRWnW54jFAdRnqHqc9oXIpBJ_1ASzsmRZcLdH784bzAbuzkUe6RHiWzCLbMC70IV4K4JyiVDFJGxhrsQOdCdAGZzuXLJcL1s4gOqCSMIDMuwepIvi1lYpMIJQ9YPUNL0xqTQJbuY9zpjWy4?purpose=inline)
+
+Objective: Verify that an administrator can create a course and save it as a draft.
+
+Test scenarios:
+
+- Admin logs in.
+- Open the Courses section.
+- Click Add Course.
+- Enter course title.
+- Enter description.
+- Set course price.
+- Select course category.
+- Upload course thumbnail if required.
+- Save the course as a draft.
+- Verify that the course appears in the admin course list.
+- Verify its status is Draft.
+
+Page Object – `pages/AdminCoursePage.js`
+
+```
+export class AdminCoursePage {
+  constructor(page) {
+    this.page = page;
+
+    this.title = page.getByLabel('Course Title');
+    this.description = page.getByLabel('Description');
+    this.price = page.getByLabel('Price');
+
+    this.saveDraft =
+      page.getByRole('button', { name: /save draft/i });
+  }
+
+  async createCourse(course) {
+    await this.title.fill(course.title);
+    await this.description.fill(course.description);
+    await this.price.fill(String(course.price));
+
+    await this.saveDraft.click();
+  }
+}
+```
+
+Test – `tests/admin/course-creation.spec.js`
+
+```
+import { test, expect } from '@playwright/test';
+import { AdminCoursePage } from '../../pages/AdminCoursePage.js';
+
+test('Admin can create a course draft', async ({ page }) => {
+  const adminCourse = new AdminCoursePage(page);
+
+  await page.goto('/admin/courses');
+
+  await page.getByRole('button', { name: /add course/i }).click();
+
+  await adminCourse.createCourse({
+    title: 'Playwright Automation',
+    description: 'Complete automation testing course',
+    price: 999
+  });
+
+  await expect(
+    page.getByText('Playwright Automation')
+  ).toBeVisible();
+});
+```
+
+## 10. Reusable fixtures and authentication
+
+Use Playwright fixtures to avoid repeating login steps.
+
+Create `fixtures/test-fixtures.js`:
+
+```
+import { test as base } from '@playwright/test';
+
+export const test = base.extend({
+  studentPage: async ({ browser }, use) => {
+    const context = await browser.newContext({
+      storageState: 'auth/student.json'
+    });
+
+    const page = await context.newPage();
+
+    await use(page);
+
+    await context.close();
+  }
+});
+
+export { expect } from '@playwright/test';
+```
+
+First, generate the student authentication state using a dedicated setup test that logs in and saves `auth/student.json`. Then reuse it for authenticated student tests.
+
+Keep authentication files out of Git using `.gitignore`:
+
+```
+node_modules/
+playwright-report/
+test-results/
+auth/*.json
+.env
+```
+
+Use separate student and admin accounts and separate authentication states.
+
+## 11. Test data management
+
+Create `data/courses.json`:
+
+```
+{
+  "freeCourse": {
+    "title": "JavaScript Basics",
+    "price": 0
+  },
+  "paidCourse": {
+    "title": "Advanced Python",
+    "price": 999
+  }
+}
+```
+
+Create `data/users.json`:
+
+```
+{
+  "student": {
+    "name": "Test Student",
+    "email": "student@example.com"
+  },
+  "admin": {
+    "email": "admin@example.com"
+  }
+}
+```
+
+Use environment variables or a secret manager for actual credentials. Never commit real passwords or tokens.
+
+## 12. GitHub Actions CI pipeline
+
+Create `.github/workflows/playwright.yml`.
+
+```
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: npx playwright test
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+```
+
+This pipeline will:
+
+- Run tests when code is pushed.
+- Run tests when a pull request is created.
+- Support manual execution.
+- Generate test reports.
+- Upload reports even when tests fail.
+
+## 13. One-page test plan
+
+Create `TEST_PLAN.md`.
+
+| Feature         | Test scenarios                                     | Test type |
+| --------------- | -------------------------------------------------- | --------- |
+| Registration    | Valid registration, invalid email, duplicate email | E2E       |
+| Login           | Valid login, invalid password, logout              | E2E       |
+| Course browsing | Search, filter, course details                     | E2E       |
+| Enrollment      | Free and paid course enrollment                    | E2E       |
+| Lesson progress | Complete lesson, verify progress                   | E2E       |
+| Assessment      | Submit answers, verify score                       | E2E       |
+| Admin course    | Create and save course draft                       | E2E       |
+
+Not covered initially:
+
+- Payment gateway's real financial transaction processing.
+- Email delivery and OTP provider reliability.
+- Full cross-browser testing.
+- Mobile device compatibility.
+- Large-scale performance and load testing.
+- Third-party integration failures.
+
+These should be added in later testing phases.
+
+## 14. Reliability and quality standards
+
+To make the framework suitable for professional use, follow these practices:
+
+1. Use `getByRole`, `getByLabel` and `getByTestId` instead of fragile XPath selectors.
+2. Use web-first assertions such as `toBeVisible()` and `toHaveText()`.
+3. Avoid fixed `waitForTimeout()` calls.
+4. Use unique test data for each registration and course creation.
+5. Keep tests independent so that parallel execution does not cause conflicts.
+6. Capture screenshots and traces on failures.
+7. Review flaky tests instead of relying on repeated retries.
+8. Never use production payment credentials in automation.
+9. Verify the suite across five consecutive CI runs before claiming reliability.
+
+## 15. Five-minute architecture walkthrough
+
+The final walkthrough should cover these topics:
+
+| Time      | Topic                                 |
+| --------- | ------------------------------------- |
+| 0:00–0:45 | Introduction and project objectives   |
+| 0:45–1:30 | Folder structure and architecture     |
+| 1:30–2:30 | Five application workflows            |
+| 2:30–3:15 | POM, fixtures and authentication      |
+| 3:15–4:15 | CI pipeline and reporting             |
+| 4:15–5:00 | Coverage gaps and future improvements |
+
+## 16. Final submission checklist
+
+Project completion
+
+# 0%
+
+0 of 13 tasks completed
+
+Create the Git repository
+
+Implement all five application workflows
+
+Create Page Object Model classes
+
+Configure fixtures and authentication storageState
+
+Add reusable helpers and test data
+
+Configure Playwright and browser execution
+
+Create GitHub Actions CI workflow
+
+Write README.md with setup instructions
+
+Write TEST_PLAN.md with coverage gaps
+
+Run the full suite and fix failures
+
+Verify five consecutive CI runs
+
+Prepare five-minute architecture walkthrough
+
+Complete peer review with three specific suggestions
+
+## Expected final deliverables
+
+1. GitHub repository containing the complete framework.
+2. README.md with installation and execution instructions.
+3. Playwright configuration and reusable POM classes.
+4. Five workflow test suites.
+5. GitHub Actions CI workflow.
+6. Test coverage plan and uncovered features.
+7. Test reports from five consecutive successful CI runs.
+8. Five-minute architecture walkthrough.
+9. Peer review with three specific improvement suggestions.
+
+Important: The code above is a starter implementation. The example routes, labels, selectors, and test data must be aligned with the actual EXELYNT staging application before execution. The five consecutive CI runs and peer review are deliverables to complete, not results already achieved.
+
+My recommendation is to build the five flows first, verify them individually, then add authentication reuse, CI, reporting and documentation. This will make the project easier to debug and maintain.
