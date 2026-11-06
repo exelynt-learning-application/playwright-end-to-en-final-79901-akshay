@@ -1,0 +1,23 @@
+{
+  "name": "exelynt-playwright-framework",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright end-to-end test framework for EXELYNT",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:learner": "playwright test tests/learner",
+    "test:admin": "playwright test tests/admin",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "test:ci": "playwright test --retries=2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.15.30",
+    "dotenv": "^16.6.1",
+    "typescript": "^5.8.3"
+  }
+}
