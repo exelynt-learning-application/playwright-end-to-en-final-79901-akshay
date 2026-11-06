@@ -1,429 +1,869 @@
-EXELYNT PLAYWRIGHT AUTOMATION FRAMEWORK DETAILED IMPLEMENTATION PLAN AND
-SUBMISSION DOCUMENT Target: Design the work to meet or exceed 75/100 on
-the stated rubric.
-
-IMPORTANT This document is an implementation plan, not proof that a
-repository or test suite has already been built. A score of 75+ cannot
-be guaranteed by text alone. The actual score depends on a working Git
-repository, correct application selectors and routes, successful test
-execution, and evidence from five consecutive CI runs. Replace example
-routes, labels, and data with the real EXELYNT application details.
-
-1.  OBJECTIVE
-
-Build a maintainable Playwright end-to-end framework for EXELYNT
-covering five user journeys: 1. Learner registration and login. 2.
-Browsing courses and enrolling in a course. 3. Completing a lesson and
-viewing learning progress. 4. Taking an assessment and viewing the
-score. 5. Admin creating and saving a course draft.
-
-Use Page Object Model (POM), reusable fixtures, isolated test data,
-authenticated storage state where appropriate, stable accessible
-locators, meaningful assertions, and GitHub Actions CI.
-
-The goal is not simply to make tests pass once. Tests must be readable,
-repeatable, independent, and capable of detecting real application
-defects.
-
-2.  PROJECT STRUCTURE
-
-exelynt-playwright/ tests/ auth/ registration.spec.js login.spec.js
-learner/ course-enrollment.spec.js lesson-progress.spec.js
-assessment-score.spec.js admin/ course-draft.spec.js pages/
-RegistrationPage.js LoginPage.js CourseCatalogPage.js
-CourseDetailsPage.js LessonPage.js AssessmentPage.js AdminCoursePage.js
-fixtures/ test-fixtures.js auth-fixtures.js utils/ test-data.js
-api-helper.js cleanup-helper.js data/ learner-data.json course-data.json
-assessment-data.json .auth/ learner-state.json admin-state.json .github/
-workflows/ playwright.yml playwright.config.js package.json .gitignore
-README.md TEST-PLAN.txt WALKTHROUGH.txt
-
-Folder responsibilities: - tests/: Test scenarios and assertions. Test
-names should describe user intent. - pages/: Page objects containing
-locators and reusable page actions. - fixtures/: Shared setup, page
-objects, and authenticated contexts. - utils/: Test-data generation, API
-setup, and cleanup helpers. Do not put page-specific locators here. -
-data/: Non-secret test data. - .auth/: Generated authentication state.
-Never commit these files because they can contain session credentials. -
-.github/workflows/: CI workflow. - README.md: Installation,
-configuration, commands, and troubleshooting. - TEST-PLAN.txt:
-Feature-to-test mapping and known gaps. - WALKTHROUGH.txt: Five-minute
-architecture walkthrough.
-
-3.  PLAYWRIGHT CONFIGURATION
-
-Configure the framework for local and CI execution: - Set testDir to
-./tests. - Read baseURL from an environment variable such as BASE_URL. -
-Use HTML and list reporters. - Capture traces on the first retry and
-screenshots on failure. - Use realistic timeouts and condition-based
-waiting. - Start with a small worker count; increase parallelism only
-after confirming test-data isolation. - Use Chromium initially. Add
-Firefox and WebKit when the application and CI capacity support them. -
-Use zero retries locally and one retry in CI initially for diagnostic
-evidence. A retry must not be used to hide a flaky test. - Never allow
-the test suite to silently target production.
-
-Recommended configuration choices: fullyParallel: true only after
-mutable test data is isolated. retries: 0 locally; 1 in CI initially.
-reporter: list and html. use.baseURL: process.env.BASE_URL. use.trace:
-on-first-retry. use.screenshot: only-on-failure.
-
-4.  PAGE OBJECT MODEL
-
-Each page object should expose understandable user actions. Keep
-expected-result assertions mainly in the test so the test’s purpose
-remains visible.
-
-RegistrationPage: - Open registration page. - Fill learner name, email,
-and password. - Submit registration. - Read success and validation
-messages.
-
-LoginPage: - Open login page. - Enter email and password. - Submit
-login. - Verify navigation to the authenticated learner area. - Read
-validation messages.
-
-CourseCatalogPage: - Search by course title. - Open a specific course
-card. - Count visible course cards. - Read course title and enrollment
-action.
-
-CourseDetailsPage: - Read course details. - Enroll in the course. -
-Verify enrollment confirmation or enrolled state.
-
-LessonPage: - Open a lesson. - Complete the lesson using the real
-application control. - Read completion state and progress.
-
-AssessmentPage: - Open an assessment. - Answer questions. - Submit the
-assessment. - Read score and result status.
-
-AdminCoursePage: - Open admin course management. - Start course
-creation. - Fill required fields. - Save as draft. - Verify draft status
-and title.
-
-Prefer getByRole, getByLabel, getByPlaceholder, and scoped getByText
-locators. Use test IDs only when a stable accessible locator is
-unavailable. Avoid brittle CSS, XPath, and selectors tied to visual
-layout.
-
-5.  REQUIRED FLOW 1: LEARNER REGISTRATION AND LOGIN
-
-Purpose: Confirm a new learner can register and authenticate.
-
-Registration steps: 1. Generate a unique email address for each run. 2.
-Open the registration page. 3. Fill all required fields with valid test
-data. 4. Submit the form. 5. Assert that the account-created success
-state appears. 6. If email verification is required, use the approved
-test-environment verification mechanism. Do not bypass security in
-production. 7. Confirm the account can proceed to login.
-
-Login steps: 1. Open the login page. 2. Enter the registered learner
-credentials. 3. Submit the form. 4. Assert navigation to the expected
-authenticated page. 5. Assert a stable authenticated element, such as
-the learner dashboard heading or profile menu.
-
-Negative checks: - Invalid password displays a useful error. - Empty
-required fields cannot be submitted. - Invalid email format is
-rejected. - Duplicate registration is handled correctly.
-
-Isolation: Use unique email addresses. Use approved API setup and
-cleanup if available. Do not depend on a previously created account
-unless the test explicitly checks existing-account login.
-
-6.  REQUIRED FLOW 2: COURSE BROWSING AND ENROLLMENT
-
-Purpose: Confirm a learner can find a course, open its details, and
-enroll.
-
-Steps: 1. Authenticate as a learner. 2. Open the course catalog. 3.
-Search for a known active course. 4. Assert the expected course card is
-visible. 5. Open that specific course card. 6. Assert the details page
-displays the expected title. 7. Click the enrollment action. 8. Assert
-enrollment confirmation or enrolled state. 9. Open the learner’s My
-Learning area. 10. Assert the course appears there.
-
-Important checks: - Scope actions to the intended course card. - Do not
-assume the first card is always the target. - Use a dedicated course or
-uniquely named test course where possible. - For paid courses, use a
-payment sandbox or controlled test payment method. Never trigger real
-charges.
-
-7.  REQUIRED FLOW 3: LESSON COMPLETION AND PROGRESS
-
-Purpose: Confirm lesson completion updates learner progress.
-
-Steps: 1. Use a learner enrolled in a controlled test course. 2. Open
-the course from My Learning. 3. Open a known lesson. 4. Complete the
-required lesson interaction. 5. Click the completion control if required
-by the product. 6. Assert the lesson is marked completed. 7. Return to
-the course overview or learning page. 8. Assert the progress indicator
-changes to the expected value or state. 9. Reload and verify the
-progress remains saved.
-
-Important checks: - Verify the actual expected progress change, not
-merely that a progress bar exists. - Avoid hardcoded percentages unless
-lesson count and calculation are controlled. - Use a dedicated learner
-and course so another test cannot change the same progress. - For
-asynchronous updates, wait for the expected UI state or relevant
-response instead of using fixed sleeps.
-
-8.  REQUIRED FLOW 4: ASSESSMENT AND SCORE
-
-Purpose: Confirm a learner can submit an assessment and view the
-resulting score.
-
-Steps: 1. Log in as a learner enrolled in the assessment course. 2. Open
-the assessment. 3. Assert the assessment title and questions are
-visible. 4. Answer questions using the correct radio buttons,
-checkboxes, or text fields. 5. Submit the assessment. 6. Confirm any
-submission confirmation. 7. Assert the result page or score summary
-appears. 8. Verify the score is within the valid range. 9. Verify
-pass/fail status against the known assessment rules. 10. Reopen the
-result and verify persistence if supported.
-
-Use deterministic questions and expected answers in the test
-environment. Avoid random questions or changing assessment content. Do
-not expose real learner assessment data in logs.
-
-9.  REQUIRED FLOW 5: ADMIN COURSE DRAFT
-
-Purpose: Confirm an authorized administrator can create and save a draft
-without publishing it.
-
-Steps: 1. Authenticate with a dedicated admin account. 2. Open admin
-course management. 3. Start course creation. 4. Fill required fields
-with unique test data, including title and description. 5. Set required
-category, price, or metadata using valid test values. 6. Select Save
-Draft or the equivalent action. 7. Assert a success notification. 8.
-Verify the course appears in the admin course list. 9. Assert its status
-is Draft and it is not published. 10. Clean up the created draft through
-an approved API or admin action where possible.
-
-Use a separate admin session. Never use learner storage state for admin
-tests. Never commit admin credentials or storage state.
-
-10. FIXTURES AND AUTHENTICATION
-
-Use fixtures to share setup while keeping tests independent.
-
-Fixture responsibilities: - Provide page objects. - Provide a learner
-account or create a unique learner when needed. - Provide authenticated
-learner context for tests that do not test login itself. - Provide a
-separate admin context for admin tests. - Clean up test-created records.
-
-Use storageState to avoid repeating UI login in every test. Keep
-dedicated registration and login tests that exercise the actual
-authentication UI. Generate learner and admin storage state separately.
-Exclude both from version control.
-
-Do not share a mutable learner account across tests that change
-enrollment, lesson progress, or assessment attempts. Shared
-authentication state is acceptable only if tests do not interfere with
-server-side data.
-
-11. DATA HANDLING AND TEST ISOLATION
-
-12. Use unique email addresses for registration tests.
-
-13. Use unique course titles for course-creation tests.
-
-14. Use controlled assessment data with known answers.
-
-15. Do not run two tests that update the same learner progress
-    simultaneously.
-
-16. Use API setup and teardown when supported.
-
-17. Clean up test-created records even when a test fails.
-
-18. Do not depend on test execution order.
-
-19. Never use production accounts or payment methods.
-
-20. Store credentials in environment variables or CI secrets.
-
-21. Exclude .auth, test-results, playwright-report, node_modules, and
-    local environment files from Git.
-
-If tests share server-side records, mark only conflicting tests serial
-or provide separate data. Do not disable parallelism for the whole suite
-without a reason.
-
-12. LOCATOR AND ASSERTION QUALITY
-
-Prefer accessible locators that reflect user-visible meaning: -
-getByRole(‘button’, { name: ‘Log in’ }) - getByLabel(‘Email’) -
-getByRole(‘heading’, { name: ‘Courses’ }) - getByRole(‘link’, { name:
-‘My Learning’ })
-
-Scope repeated controls to their relevant course card or section. Use
-web-first assertions such as toBeVisible(), toHaveText(), toBeEnabled(),
-and page.toHaveURL(). Avoid reading a value once and immediately
-comparing it if the UI may still be updating. Avoid fixed waits unless
-there is a rare, documented reason.
-
-Every test should have a descriptive name, clear setup, one main user
-outcome, meaningful assertions, and no unrelated actions.
-
-13. CI WORKFLOW
-
-Use GitHub Actions on pull requests and pushes to the main development
-branch.
-
-CI stages: 1. Check out the repository. 2. Set up the supported Node.js
-version. 3. Install dependencies with npm ci. 4. Install Playwright
-browsers and system dependencies. 5. Run lint or formatting checks if
-configured. 6. Run Playwright against the approved staging or test
-environment. 7. Save HTML report, traces, and screenshots as artifacts.
-8. Fail the workflow when blocking tests fail.
-
-Required secrets or variables: - BASE_URL: approved test environment
-URL. - LEARNER_EMAIL and LEARNER_PASSWORD if a controlled account is
-used. - ADMIN_EMAIL and ADMIN_PASSWORD if a controlled admin account is
-used. - Any other test-only credentials required by the application.
-
-Never write secrets directly in the workflow. Never run destructive
-tests against production.
-
-14. RELIABILITY: FIVE CONSECUTIVE CI RUNS
-
-The rubric awards reliability for five consecutive CI runs. One
-successful run is not enough.
-
-1.  Run locally and resolve deterministic failures.
-2.  Run the CI workflow five consecutive times against the same
-    controlled environment.
-3.  Record each run number, date, passed tests, failed tests, skipped
-    tests, and duration.
-4.  Investigate intermittent failures.
-5.  Use traces, screenshots, and logs to determine whether the cause is
-    a product defect, test defect, environment issue, or shared data.
-6.  Fix the underlying cause instead of increasing retries to make the
-    pipeline green.
-7.  Repeat the five-run check after significant reliability changes.
-
-Retries may collect diagnostic evidence, but a test that only passes
-after retry must still be investigated and reported as flaky.
-
-15. REPORTING AND DEBUGGING
-
-Use the Playwright HTML report. For failures, retain the error message,
-stack trace, screenshot, trace, relevant browser console errors, and
-relevant request failures. Do not expose passwords, tokens, or personal
-data in logs.
-
-A useful report explains which user journey failed, the expected result,
-and the actual result.
-
-16. ONE-PAGE TEST PLAN
-
-Registration: - Valid registration. - Required-field validation. -
-Invalid email validation. - Duplicate email handling. Expected: Valid
-users register; invalid data receives clear feedback.
-
-Login: - Valid login. - Invalid password. - Empty credentials. Expected:
-Valid users reach the learner area; invalid users remain
-unauthenticated.
-
-Course browsing and enrollment: - Search for a course. - Open course
-details. - Enroll in an available free course. - Verify the course in My
-Learning. Expected: Learner finds and enrolls in the intended course.
-
-Lesson and progress: - Open a lesson. - Complete a lesson. - Verify
-progress changes. - Reload and verify persistence. Expected: Completion
-is saved and progress is accurate.
-
-Assessment and score: - Submit known answers. - Verify score. - Verify
-pass/fail status. - Reopen saved result. Expected: Assessment produces a
-correct and persistent result.
-
-Admin draft: - Open course creation as admin. - Save a valid draft. -
-Verify draft appears with Draft status. - Verify it is not published.
-Expected: Authorized admin creates a draft without publishing it.
-
-Known gaps requiring future tests: - Real payment provider transactions
-and refunds. - External email delivery reliability. - Full cross-browser
-and operating-system coverage. - High-volume load and stress testing. -
-Production infrastructure failover. - Every role and permission
-combination. - Manual assistive-technology testing. - All possible
-assessment question combinations. - Third-party integrations outside the
-controlled environment.
-
-State these gaps honestly. Five flows do not prove that every
-application feature is covered.
-
-17. FIVE-MINUTE WALKTHROUGH SCRIPT
-
-Minute 1 - Introduction and structure: This is the EXELYNT Playwright
-automation framework. It covers learner registration and login, course
-browsing and enrollment, lesson progress, assessment scoring, and admin
-course draft creation. The tests folder contains scenarios, pages
-contains page objects, fixtures contains shared setup, utils contains
-helpers, and data contains controlled test data.
-
-Minute 2 - Page objects and locators: The framework uses Page Object
-Model to separate locators and reusable page actions from test intent.
-Locators prefer accessible roles and labels, and assertions verify
-meaningful outcomes rather than merely checking that a page opened.
-
-Minute 3 - Authentication and isolation: Learner and admin
-authentication are separate. Storage state reduces repeated login setup
-for tests that are not testing login itself, while registration and
-login have dedicated end-to-end coverage. Tests use unique data and
-cleanup to prevent one test from affecting another.
-
-Minute 4 - CI and reliability: GitHub Actions installs dependencies and
-browsers, runs the suite, and stores reports and failure artifacts. I
-review traces and screenshots for failures. I do not treat retries as a
-fix; I investigate flaky tests and verify the suite across five
-consecutive CI runs.
-
-Minute 5 - Design decision and next steps: If I started again, I would
-establish test-data isolation and API-based setup earlier because shared
-accounts and records can create flaky tests. My next step is to expand
-role and permission coverage, add accessibility checks to important
-pages, and add a performance smoke check with a realistic threshold.
-
-18. README CONTENT
-
-README must explain: - Project purpose and covered flows. -
-Prerequisites and supported Node.js version. - Installation commands. -
-Required environment variables. - Browser installation. - How to run all
-tests. - How to run one test file. - How to run headed mode. - How to
-open the HTML report. - How authentication state is generated. - How
-test data is created and cleaned. - How GitHub Actions runs. - Common
-troubleshooting. - Known limitations and coverage gaps.
-
-Commands to document: npm ci npx playwright install npx playwright test
-npx playwright test tests/auth/login.spec.js npx playwright test –headed
+EXELYNT APPLICATION
+PLAYWRIGHT CAPSTONE PROJECT WITH RUBRIC
+COMPLETE TEXT SUBMISSION PACK
+Target score: 75/100 or higher
+============================================================
+
+IMPORTANT SUBMISSION NOTE
+This file contains the proposed framework structure, implementation examples, test plan, CI workflow, README content, and walkthrough script in one text document. It is designed to address every category in the assignment rubric. The actual score is decided by the working Git repository and the evidence produced when the tests run. Do not claim that CI passed five times unless you have actually run it five times. Replace the example selectors, routes, credentials, and test data with the real EXELYNT staging application's details.
+
+PROJECT GOAL
+Build a maintainable Playwright end-to-end test framework for EXELYNT covering:
+1. Learner registration and login.
+2. Browsing courses and enrolling in a course.
+3. Completing a lesson and viewing learning progress.
+4. Taking an assessment and viewing the score.
+5. An administrator creating a course draft.
+
+The framework uses:
+- Page Object Model (POM).
+- Reusable Playwright fixtures.
+- Separate learner and admin authentication state.
+- Unique test data and cleanup.
+- Accessible locators and web-first assertions.
+- GitHub Actions continuous integration.
+- HTML reports, screenshots, and traces for debugging.
+
+============================================================
+PART 1 - PROJECT FOLDER STRUCTURE
+============================================================
+
+exelynt-playwright/
+|
+|-- tests/
+|   |-- auth/
+|   |   |-- registration.spec.js
+|   |   |-- login.spec.js
+|   |
+|   |-- learner/
+|   |   |-- course-enrollment.spec.js
+|   |   |-- lesson-progress.spec.js
+|   |   |-- assessment-score.spec.js
+|   |
+|   |-- admin/
+|       |-- course-draft.spec.js
+|
+|-- pages/
+|   |-- RegistrationPage.js
+|   |-- LoginPage.js
+|   |-- CourseCatalogPage.js
+|   |-- CourseDetailsPage.js
+|   |-- LessonPage.js
+|   |-- AssessmentPage.js
+|   |-- AdminCoursePage.js
+|
+|-- fixtures/
+|   |-- test-fixtures.js
+|   |-- auth-fixtures.js
+|
+|-- utils/
+|   |-- test-data.js
+|   |-- cleanup-helper.js
+|
+|-- data/
+|   |-- course-data.json
+|   |-- assessment-data.json
+|
+|-- .auth/
+|   |-- learner-state.json
+|   |-- admin-state.json
+|
+|-- .github/
+|   |-- workflows/
+|       |-- playwright.yml
+|
+|-- playwright.config.js
+|-- package.json
+|-- .gitignore
+|-- README.md
+|-- TEST-PLAN.txt
+|-- WALKTHROUGH.txt
+
+FOLDER PURPOSES
+tests/: Contains readable test scenarios and assertions.
+pages/: Contains page-specific locators and reusable user actions.
+fixtures/: Creates shared page objects and authenticated contexts.
+utils/: Contains test-data generation and cleanup functions.
+data/: Contains controlled, non-secret test data.
+.auth/: Contains generated session state; never commit these files.
+.github/workflows/: Contains the CI workflow.
+playwright.config.js: Contains browser, timeout, reporter, and execution settings.
+README.md: Explains setup and commands.
+TEST-PLAN.txt: Maps required features to test cases and identifies coverage gaps.
+WALKTHROUGH.txt: Contains the five-minute framework explanation.
+
+============================================================
+PART 2 - INSTALLATION AND PACKAGE CONFIGURATION
+============================================================
+
+Create package.json:
+
+{
+  "name": "exelynt-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}
+
+Install dependencies:
+
+npm install
+npx playwright install
+
+Use the Playwright version approved by the project. Keep package-lock.json in Git so CI installs reproducible dependency versions.
+
+============================================================
+PART 3 - PLAYWRIGHT CONFIGURATION
+============================================================
+
+File: playwright.config.js
+
+const { defineConfig, devices } = require('@playwright/test');
+
+module.exports = defineConfig({
+  testDir: './tests',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }]
+  ],
+  use: {
+    baseURL: process.env.BASE_URL,
+    headless: true,
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    actionTimeout: 15000,
+    navigationTimeout: 30000
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] }
+    }
+  ]
+});
+
+CONFIGURATION EXPLANATION
+- testDir keeps all automated tests inside the tests folder.
+- fullyParallel allows independent tests to run concurrently. Tests that modify shared data must use separate data or be isolated.
+- forbidOnly prevents accidental test.only from reaching CI.
+- retries are limited to one in CI for diagnostics. A retry is not considered a fix for flaky tests.
+- workers are limited in CI to reduce load on the shared staging environment.
+- list reporter gives readable terminal output.
+- HTML reporter provides a detailed report.
+- trace, screenshot, and video help diagnose failures.
+- baseURL is read from the environment so the test suite can run against an approved test environment.
+
+Before execution, set BASE_URL to the real EXELYNT staging URL. Never silently run destructive tests against production.
+
+============================================================
+PART 4 - TEST DATA AND FIXTURES
+============================================================
+
+File: utils/test-data.js
+
+function uniqueEmail() {
+  const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `pw-learner-${id}@example.test`;
+}
+
+function uniqueCourseTitle() {
+  return `Playwright Test Course ${Date.now()}`;
+}
+
+module.exports = { uniqueEmail, uniqueCourseTitle };
+
+The example email domain is for test data only. Use an email domain and verification mechanism supported by the EXELYNT test environment.
+
+File: fixtures/test-fixtures.js
+
+const base = require('@playwright/test');
+const { LoginPage } = require('../pages/LoginPage');
+const { CourseCatalogPage } = require('../pages/CourseCatalogPage');
+const { LessonPage } = require('../pages/LessonPage');
+const { AssessmentPage } = require('../pages/AssessmentPage');
+const { AdminCoursePage } = require('../pages/AdminCoursePage');
+
+exports.test = base.test.extend({
+  loginPage: async ({ page }, use) => {
+    await use(new LoginPage(page));
+  },
+
+  courseCatalogPage: async ({ page }, use) => {
+    await use(new CourseCatalogPage(page));
+  },
+
+  lessonPage: async ({ page }, use) => {
+    await use(new LessonPage(page));
+  },
+
+  assessmentPage: async ({ page }, use) => {
+    await use(new AssessmentPage(page));
+  },
+
+  adminCoursePage: async ({ page }, use) => {
+    await use(new AdminCoursePage(page));
+  }
+});
+
+exports.expect = base.expect;
+
+AUTHENTICATION STATE
+Use separate learner and admin storage-state files. Generate them through a controlled setup process using approved test accounts. Keep the files out of Git because they contain active session data.
+
+Example .gitignore:
+
+node_modules/
+playwright-report/
+test-results/
+.auth/
+.env
+.env.*
+!.env.example
+
+Do not commit passwords, tokens, cookies, or storage-state files.
+
+============================================================
+PART 5 - PAGE OBJECTS
+============================================================
+
+NOTE
+The following locators are examples. Confirm the actual EXELYNT labels, accessible roles, and routes in the staging application. Prefer getByRole and getByLabel. Do not copy an example selector if it does not match the real interface.
+
+File: pages/LoginPage.js
+
+class LoginPage {
+  constructor(page) {
+    this.page = page;
+    this.email = page.getByLabel('Email');
+    this.password = page.getByLabel('Password');
+    this.submitButton = page.getByRole('button', { name: /log in|sign in/i });
+  }
+
+  async open() {
+    await this.page.goto('/login');
+  }
+
+  async login(email, password) {
+    await this.email.fill(email);
+    await this.password.fill(password);
+    await this.submitButton.click();
+  }
+}
+
+module.exports = { LoginPage };
+
+File: pages/RegistrationPage.js
+
+class RegistrationPage {
+  constructor(page) {
+    this.page = page;
+    this.name = page.getByLabel(/full name|name/i);
+    this.email = page.getByLabel('Email');
+    this.password = page.getByLabel('Password');
+    this.submitButton = page.getByRole('button', { name: /register|sign up|create account/i });
+  }
+
+  async open() {
+    await this.page.goto('/register');
+  }
+
+  async register(name, email, password) {
+    await this.name.fill(name);
+    await this.email.fill(email);
+    await this.password.fill(password);
+    await this.submitButton.click();
+  }
+}
+
+module.exports = { RegistrationPage };
+
+File: pages/CourseCatalogPage.js
+
+class CourseCatalogPage {
+  constructor(page) {
+    this.page = page;
+    this.search = page.getByRole('searchbox');
+  }
+
+  async open() {
+    await this.page.goto('/courses');
+  }
+
+  async searchCourse(courseName) {
+    await this.search.fill(courseName);
+  }
+
+  courseCard(courseName) {
+    return this.page.getByRole('article').filter({ hasText: courseName });
+  }
+
+  async openCourse(courseName) {
+    await this.courseCard(courseName).getByRole('link').click();
+  }
+}
+
+module.exports = { CourseCatalogPage };
+
+File: pages/CourseDetailsPage.js
+
+class CourseDetailsPage {
+  constructor(page) {
+    this.page = page;
+    this.enrollButton = page.getByRole('button', { name: /enroll|join course/i });
+  }
+
+  async enroll() {
+    await this.enrollButton.click();
+  }
+}
+
+module.exports = { CourseDetailsPage };
+
+File: pages/LessonPage.js
+
+class LessonPage {
+  constructor(page) {
+    this.page = page;
+    this.completeButton = page.getByRole('button', { name: /mark.*complete|complete lesson/i });
+    this.progress = page.getByTestId('course-progress');
+  }
+
+  async completeLesson() {
+    await this.completeButton.click();
+  }
+}
+
+module.exports = { LessonPage };
+
+File: pages/AssessmentPage.js
+
+class AssessmentPage {
+  constructor(page) {
+    this.page = page;
+    this.submitButton = page.getByRole('button', { name: /submit assessment|submit answers/i });
+    this.score = page.getByTestId('assessment-score');
+  }
+
+  async submit() {
+    await this.submitButton.click();
+  }
+}
+
+module.exports = { AssessmentPage };
+
+File: pages/AdminCoursePage.js
+
+class AdminCoursePage {
+  constructor(page) {
+    this.page = page;
+    this.createButton = page.getByRole('button', { name: /create course|add course/i });
+    this.title = page.getByLabel(/course title|title/i);
+    this.description = page.getByLabel(/description/i);
+    this.saveDraftButton = page.getByRole('button', { name: /save draft/i });
+  }
+
+  async open() {
+    await this.page.goto('/admin/courses');
+  }
+
+  async createDraft(title, description) {
+    await this.createButton.click();
+    await this.title.fill(title);
+    await this.description.fill(description);
+    await this.saveDraftButton.click();
+  }
+}
+
+module.exports = { AdminCoursePage };
+
+============================================================
+PART 6 - REQUIRED TEST CASES
+============================================================
+
+FILE: tests/auth/registration.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { RegistrationPage } = require('../../pages/RegistrationPage');
+const { uniqueEmail } = require('../../utils/test-data');
+
+test('new learner can register with valid details', async ({ page }) => {
+  const registration = new RegistrationPage(page);
+  const email = uniqueEmail();
+
+  await registration.open();
+  await registration.register('Playwright Learner', email, 'TestPassword!234');
+
+  await expect(
+    page.getByText(/registration successful|account created|verify your email/i)
+  ).toBeVisible();
+});
+
+FILE: tests/auth/login.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { LoginPage } = require('../../pages/LoginPage');
+
+test('registered learner can log in successfully', async ({ page }) => {
+  const login = new LoginPage(page);
+
+  await login.open();
+  await login.login(
+    process.env.LEARNER_EMAIL,
+    process.env.LEARNER_PASSWORD
+  );
+
+  await expect(page).toHaveURL(/dashboard|my-learning|learner/i);
+  await expect(
+    page.getByRole('heading', { name: /dashboard|my learning/i })
+  ).toBeVisible();
+});
+
+FILE: tests/learner/course-enrollment.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { CourseCatalogPage } = require('../../pages/CourseCatalogPage');
+
+test('learner can find a course and open its details', async ({ page }) => {
+  const catalog = new CourseCatalogPage(page);
+  const courseName = process.env.TEST_COURSE_NAME;
+
+  await page.goto('/courses');
+  await catalog.searchCourse(courseName);
+
+  await expect(catalog.courseCard(courseName)).toBeVisible();
+  await catalog.openCourse(courseName);
+
+  await expect(page.getByRole('heading', { name: courseName })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /enroll|join course/i })
+  ).toBeVisible();
+});
+
+FILE: tests/learner/lesson-progress.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { LessonPage } = require('../../pages/LessonPage');
+
+test('learner completion updates lesson progress', async ({ page }) => {
+  const lesson = new LessonPage(page);
+
+  await page.goto(process.env.TEST_LESSON_URL);
+  await lesson.completeLesson();
+
+  await expect(
+    page.getByText(/completed/i).first()
+  ).toBeVisible();
+
+  await expect(lesson.progress).toBeVisible();
+
+  await page.reload();
+
+  await expect(
+    page.getByText(/completed/i).first()
+  ).toBeVisible();
+});
+
+FILE: tests/learner/assessment-score.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { AssessmentPage } = require('../../pages/AssessmentPage');
+
+test('learner can submit an assessment and view the score', async ({ page }) => {
+  const assessment = new AssessmentPage(page);
+
+  await page.goto(process.env.TEST_ASSESSMENT_URL);
+
+  // Select deterministic answers using the actual question labels.
+  await page.getByLabel(process.env.ASSESSMENT_ANSWER_1).check();
+  await page.getByLabel(process.env.ASSESSMENT_ANSWER_2).check();
+
+  await assessment.submit();
+
+  await expect(assessment.score).toBeVisible();
+  await expect(assessment.score).toContainText(/\d+/);
+});
+
+FILE: tests/admin/course-draft.spec.js
+
+const { test, expect } = require('@playwright/test');
+const { AdminCoursePage } = require('../../pages/AdminCoursePage');
+const { uniqueCourseTitle } = require('../../utils/test-data');
+
+test('admin can create and save a course draft', async ({ page }) => {
+  const adminCourse = new AdminCoursePage(page);
+  const title = uniqueCourseTitle();
+
+  await adminCourse.open();
+  await adminCourse.createDraft(
+    title,
+    'Course draft created by the Playwright automated test.'
+  );
+
+  await expect(page.getByText(/draft saved|course created/i)).toBeVisible();
+  await expect(page.getByText(title)).toBeVisible();
+  await expect(page.getByText(/draft/i).first()).toBeVisible();
+});
+
+TEST IMPLEMENTATION NOTES
+- The examples demonstrate the intended architecture and assertions.
+- Confirm the real EXELYNT routes and labels before execution.
+- Registration may require email verification. Use the approved test-environment method.
+- The learner login test requires a valid controlled learner account.
+- Course enrollment must include the actual enrollment action and confirmation in the completed test.
+- Lesson progress must use a controlled course and learner.
+- Assessment questions must have deterministic answers.
+- Admin draft creation must use a separate admin account.
+- Add API-based setup and teardown if supported by the application.
+- Do not claim these tests passed until they have been executed successfully.
+
+============================================================
+PART 7 - GITHUB ACTIONS CI
+============================================================
+
+File: .github/workflows/playwright.yml
+
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        env:
+          CI: true
+          BASE_URL: ${{ secrets.BASE_URL }}
+          LEARNER_EMAIL: ${{ secrets.LEARNER_EMAIL }}
+          LEARNER_PASSWORD: ${{ secrets.LEARNER_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          TEST_COURSE_NAME: ${{ vars.TEST_COURSE_NAME }}
+          TEST_LESSON_URL: ${{ vars.TEST_LESSON_URL }}
+          TEST_ASSESSMENT_URL: ${{ vars.TEST_ASSESSMENT_URL }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 14
+
+CI EXPLANATION
+The workflow runs on pushes and pull requests. It installs the locked dependencies and Chromium, runs the test suite against the configured test environment, and uploads the HTML report and failure artifacts. Credentials are stored in GitHub Secrets, not in the YAML file. The workflow must point to staging or another approved test environment, never production.
+
+============================================================
+PART 8 - TEST DATA ISOLATION AND SECURITY
+============================================================
+
+1. Generate unique learner emails for registration tests.
+2. Use unique course names for admin course creation.
+3. Keep learner and admin authentication separate.
+4. Do not allow parallel tests to modify the same learner's progress or assessment attempt.
+5. Use dedicated test courses and deterministic assessment data.
+6. Clean up records created by tests, even after failure.
+7. Use API setup and teardown where supported.
+8. Never commit passwords, tokens, cookies, or storage-state files.
+9. Never use real payment methods.
+10. Do not expose personal learner information in logs or reports.
+
+If two tests update the same server-side record, give them separate test data or serialize only those conflicting tests. Do not disable parallel execution for the entire suite without evidence that it is necessary.
+
+============================================================
+PART 9 - LOCATOR, ASSERTION, AND RELIABILITY RULES
+============================================================
+
+LOCATOR RULES
+Prefer:
+- getByRole()
+- getByLabel()
+- getByPlaceholder()
+- getByTestId() only when needed
+- Scoped locators for repeated course cards and buttons
+
+Avoid:
+- Long CSS selectors.
+- Fragile XPath expressions.
+- Selectors based on element position.
+- Locators that depend on changing visual layout.
+- Selecting the first matching button when multiple buttons exist.
+
+ASSERTION RULES
+Use Playwright web-first assertions:
+- expect(locator).toBeVisible()
+- expect(locator).toHaveText()
+- expect(locator).toBeEnabled()
+- expect(page).toHaveURL()
+
+Do not use fixed sleeps to wait for ordinary UI updates. Wait for the expected element, state, or network response.
+
+RELIABILITY RULES
+- Make each test independent.
+- Do not depend on execution order.
+- Use controlled test data.
+- Keep retries limited.
+- Investigate failures rather than hiding them with retries.
+- Save traces and screenshots for failed tests.
+- Run the complete suite five consecutive times before claiming five-run reliability.
+
+============================================================
+PART 10 - FIVE CONSECUTIVE CI RUN RECORD
+============================================================
+
+Complete this table only after running the workflow. Do not mark a run as passed without evidence.
+
+Run 1: Date __________  Passed ____ Failed ____ Skipped ____  Result ______
+Run 2: Date __________  Passed ____ Failed ____ Skipped ____  Result ______
+Run 3: Date __________  Passed ____ Failed ____ Skipped ____  Result ______
+Run 4: Date __________  Passed ____ Failed ____ Skipped ____  Result ______
+Run 5: Date __________  Passed ____ Failed ____ Skipped ____  Result ______
+
+Reliability acceptance:
+- All five runs complete.
+- No unexplained intermittent failures.
+- Any test that passes only on retry is investigated.
+- Reports and traces are retained.
+- Test data does not leak between runs.
+
+============================================================
+PART 11 - ONE-PAGE TEST PLAN
+============================================================
+
+FEATURE 1: LEARNER REGISTRATION AND LOGIN
+Test cases:
+- Register a new learner with valid details.
+- Reject invalid email format.
+- Validate required fields.
+- Handle duplicate email.
+- Log in with valid credentials.
+- Reject invalid credentials.
+Expected result:
+A valid learner can register and log in. Invalid input produces clear feedback and does not create an authenticated session.
+
+FEATURE 2: COURSE BROWSING AND ENROLLMENT
+Test cases:
+- Open course catalog.
+- Search for a known course.
+- Open the correct course details.
+- Enroll in an available test course.
+- Verify the course appears in My Learning.
+Expected result:
+The learner can find and enroll in the intended course.
+
+FEATURE 3: LESSON COMPLETION AND PROGRESS
+Test cases:
+- Open an enrolled course.
+- Open a lesson.
+- Complete the lesson.
+- Verify lesson completion.
+- Verify progress changes.
+- Reload and verify progress persists.
+Expected result:
+The completion state and progress are saved correctly.
+
+FEATURE 4: ASSESSMENT AND SCORE
+Test cases:
+- Open a known assessment.
+- Answer deterministic questions.
+- Submit answers.
+- Verify score.
+- Verify pass/fail status.
+- Reopen result if supported.
+Expected result:
+The application records the attempt and displays the correct result.
+
+FEATURE 5: ADMIN COURSE DRAFT
+Test cases:
+- Log in as admin.
+- Open course creation.
+- Enter valid course data.
+- Save draft.
+- Verify draft title and Draft status.
+- Verify it is not published.
+Expected result:
+An authorized admin can create a draft without publishing it.
+
+KNOWN COVERAGE GAPS
+- Real payment provider transactions and refunds.
+- External email delivery reliability.
+- Full browser and operating-system matrix.
+- High-volume performance and stress testing.
+- Production infrastructure failover.
+- Every role and permission combination.
+- Full manual assistive-technology testing.
+- Every possible assessment question combination.
+- All third-party integrations.
+
+These gaps are listed honestly so the test plan does not claim coverage that has not been implemented.
+
+============================================================
+PART 12 - README TEXT
+============================================================
+
+EXELYNT PLAYWRIGHT AUTOMATION
+
+Purpose:
+This repository contains Playwright end-to-end tests for key EXELYNT learner and admin journeys.
+
+Prerequisites:
+- Node.js 20 or the version approved by the project.
+- npm.
+- Access to the EXELYNT staging environment.
+- Controlled learner and admin test accounts.
+
+Installation:
+1. Clone the repository.
+2. Run npm ci.
+3. Run npx playwright install.
+4. Configure the required environment variables.
+5. Run the test suite.
+
+Environment variables:
+BASE_URL
+LEARNER_EMAIL
+LEARNER_PASSWORD
+ADMIN_EMAIL
+ADMIN_PASSWORD
+TEST_COURSE_NAME
+TEST_LESSON_URL
+TEST_ASSESSMENT_URL
+
+Never commit actual credentials. Use a local environment file excluded by .gitignore or CI secrets.
+
+Run all tests:
+npx playwright test
+
+Run one test:
+npx playwright test tests/auth/login.spec.js
+
+Run with browser visible:
+npx playwright test --headed
+
+Open HTML report:
 npx playwright show-report
 
-19. RUBRIC PRIORITIES FOR A 75+ TARGET
+Debugging:
+When a test fails, inspect the terminal error, HTML report, screenshot, and trace. Check whether the failure is caused by an application defect, locator change, invalid test data, environment issue, or shared state.
 
-The stated rubric totals 100: - Coverage of five flows: 20 points. -
-Locator and assertion quality: 15 points. - POM, fixtures, and
-storageState architecture: 20 points. - Data handling and isolation: 10
-points. - Reliability across five consecutive CI runs: 15 points. - CI
-and reporting: 10 points. - Documentation: 10 points.
+Security:
+Authentication state, passwords, tokens, and local environment files must not be committed. Use only approved test accounts and test environments.
 
-Priority order: 1. Make all five flows executable and assert real
-outcomes. 2. Implement clean POM, fixtures, and separate authentication
-states. 3. Make test data unique and tests independent. 4. Configure CI
-and retain diagnostic reports. 5. Prove stability with five consecutive
-CI runs. 6. Complete README, test plan, and walkthrough.
+Known limitations:
+The suite covers the five required flows but does not cover every payment, integration, browser, permission, or load-testing scenario.
 
-Do not claim a score or five successful runs unless evidence exists. The
-strongest submission includes a working repository, test results, CI run
-history, reports, and documentation that match the actual
-implementation.
+============================================================
+PART 13 - FIVE-MINUTE WALKTHROUGH SCRIPT
+============================================================
 
-20. FINAL SUBMISSION CHECKLIST
+MINUTE 1 - INTRODUCTION AND STRUCTURE
+This is the EXELYNT Playwright automation framework. It covers learner registration and login, course browsing and enrollment, lesson completion and progress, assessment scoring, and admin course draft creation. The tests folder contains scenarios, pages contains page objects, fixtures contains shared setup, utils contains helpers, and data contains controlled test data.
 
-Submit: 1. Git repository containing the working Playwright framework.
-2. README.md with setup and execution instructions. 3.
-.github/workflows/playwright.yml. 4. TEST-PLAN.txt mapping features to
-test cases and listing gaps. 5. WALKTHROUGH.txt or a five-minute
-recording. 6. Evidence of five consecutive successful CI runs. 7. HTML
-test report and failure artifacts where applicable.
+MINUTE 2 - PAGE OBJECTS AND LOCATORS
+The framework uses Page Object Model to separate page locators and reusable actions from test intent. It prefers accessible roles and labels. Tests use web-first assertions to verify meaningful user outcomes rather than simply checking that a page opened.
 
-This plan addresses every category in the grading rubric and is designed
-to target 75 points or higher, provided the implementation works against
-the actual EXELYNT application.
+MINUTE 3 - AUTHENTICATION AND ISOLATION
+Learner and admin authentication are separate. Storage state can reduce repeated login setup for tests that are not specifically testing authentication. Registration and login retain dedicated end-to-end tests. Unique data and cleanup prevent one test from affecting another.
+
+MINUTE 4 - CI AND RELIABILITY
+GitHub Actions installs dependencies and browsers, runs the suite, and saves reports and failure artifacts. Traces and screenshots help diagnose failures. Retries are diagnostic only; they are not a substitute for fixing flaky tests. The suite must be verified over five consecutive CI runs.
+
+MINUTE 5 - DESIGN DECISION AND NEXT STEP
+If I started again, I would establish test-data isolation and API-based setup earlier because shared accounts and records can cause flaky tests. My next step is to expand role and permission coverage, add accessibility checks to important pages, and add a performance smoke check with a realistic threshold.
+
+============================================================
+PART 14 - RUBRIC MAPPING AND 75-POINT TARGET
+============================================================
+
+The assignment rubric totals 100 points:
+
+1. Coverage of five flows: 20 points.
+2. Locator and assertion quality: 15 points.
+3. POM, fixtures, and storageState architecture: 20 points.
+4. Data handling and isolation: 10 points.
+5. Reliability across five consecutive CI runs: 15 points.
+6. CI and reporting: 10 points.
+7. Documentation: 10 points.
+
+TARGET PLAN
+Coverage: Implement all five flows with meaningful assertions.
+Locators: Use accessible and stable locators; avoid brittle selectors.
+Architecture: Keep page objects, fixtures, and tests separate; use separate learner/admin state.
+Data: Use unique data and cleanup; avoid shared mutable records.
+Reliability: Prove five consecutive CI runs and investigate flakes.
+CI: Run on pull requests and pushes; retain HTML reports and artifacts.
+Documentation: Submit README, test plan, coverage gaps, and walkthrough.
+
+TARGET SCORE: 75/100 OR HIGHER
+
+This is a target, not a verified grade. The final grade depends on the actual repository, working tests, CI evidence, and quality of the implementation. Do not report a verified 75/100 until the evaluator has graded the work.
+
+============================================================
+PART 15 - FINAL SUBMISSION CHECKLIST
+============================================================
+
+[ ] Git repository created and accessible to the evaluator.
+[ ] Playwright dependencies and lockfile committed.
+[ ] All five required flows implemented.
+[ ] Page objects are separate from test specs.
+[ ] Fixtures are reusable and understandable.
+[ ] Learner and admin authentication are separated.
+[ ] Storage-state files are excluded from Git.
+[ ] Test data is unique and isolated.
+[ ] Cleanup is implemented where possible.
+[ ] Locators are stable and accessible.
+[ ] Assertions verify real outcomes.
+[ ] GitHub Actions workflow is committed.
+[ ] HTML report and failure artifacts are uploaded.
+[ ] Five consecutive CI runs have been completed and recorded.
+[ ] README explains setup and commands.
+[ ] Test plan maps features to cases and lists gaps.
+[ ] Five-minute walkthrough is recorded or included.
+[ ] No secrets or real learner data are committed.
+
+FINAL CONCLUSION
+This submission pack addresses all seven rubric categories and provides the structure and implementation examples for the EXELYNT Playwright capstone. To reach the 75-point target, implement and adapt the examples against the actual EXELYNT staging application, run the tests, fix all failures, complete five consecutive CI runs, and submit the repository with its reports and documentation. The text file is the complete written companion to the repository; it does not replace the required executable Git repository.
