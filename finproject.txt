@@ -866,4 +866,10 @@ PART 15 - FINAL SUBMISSION CHECKLIST
 [ ] No secrets or real learner data are committed.
 
 FINAL CONCLUSION
-This submission pack addresses all seven rubric categories and provides the structure and implementation examples for the EXELYNT Playwright capstone. To reach the 75-point target, implement and adapt the examples against the actual EXELYNT staging application, run the tests, fix all failures, complete five consecutive CI runs, and submit the repository with its reports and documentation. The text file is the complete written companion to the repository; it does not replace the required executable Git repository.
+This submission pack addresses all seven rubric categories and provides the structure and implementation examples for the EXELYNT Playwright capstone. To reach the 75-point target, implement and adapt the examples against the actual EXELYNT staging application, run the tests, fix all failures, complete five consecutive CI runs, and submit the repository with its reports and documentation. The text file is the complete written companion to the repository; it does not replace the required executable Git repository
+Fix these 5 things:
+1. Connect the reusable fixtures to all test specifications.
+2. Create an authentication setup project that generates learner and admin storageState files.
+3. Implement the actual course enrollment action and verify enrollment.
+4. Add a cleanup helper to remove test-created data.
+5. Run CI successfully five consecutive times and record the results..
