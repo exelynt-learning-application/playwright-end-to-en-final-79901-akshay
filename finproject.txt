@@ -758,3 +758,235 @@ Complete peer review with three specific suggestions
 Important: The code above is a starter implementation. The example routes, labels, selectors, and test data must be aligned with the actual EXELYNT staging application before execution. The five consecutive CI runs and peer review are deliverables to complete, not results already achieved.
 
 My recommendation is to build the five flows first, verify them individually, then add authentication reuse, CI, reporting and documentation. This will make the project easier to debug and maintain.
+# EXELYNT APPLICATION – COMPLETE PLAYWRIGHT AUTOMATION FRAMEWORK
+
+## 1. Project Overview
+
+The objective of this project is to develop a complete Playwright automation testing framework for the EXELYNT application. The framework will cover five major application workflows, including learner registration and login, course browsing and enrollment, lesson completion and progress tracking, assessment submission and score verification, and admin course creation.
+
+The framework will be designed using JavaScript, Playwright, and the Page Object Model (POM) design pattern. It will include reusable functions, fixtures, test data management, browser session management, automated reporting, and Continuous Integration (CI).
+
+The main goal is to make the framework maintainable, reusable, scalable, and reliable so that new test cases can be added without duplicating existing code.
+
+## 2. Technology Stack
+
+The following technologies will be used:
+
+1. Playwright – Browser automation and end-to-end testing.
+2. JavaScript – Programming language for writing test cases.
+3. Node.js – Runtime environment.
+4. Page Object Model (POM) – Maintainable test architecture.
+5. Git and GitHub – Source code management and version control.
+6. GitHub Actions – Automated CI pipeline.
+7. Playwright HTML Reporter – Test execution reports.
+8. JSON – Test data management.
+9. Axe-core Playwright – Accessibility testing.
+
+## 3. Project Folder Structure
+
+The project will follow a modular folder structure.
+
+project/
+
+tests/\
+&#x20;       registration.spec.js\
+&#x20;       login.spec.js\
+&#x20;       course-enrollment.spec.js\
+&#x20;       lesson-progress.spec.js\
+&#x20;       assessment.spec.js\
+&#x20;       admin-course.spec.js
+
+pages/\
+&#x20;       RegistrationPage.js\
+&#x20;       LoginPage.js\
+&#x20;       CourseCatalogPage.js\
+&#x20;       CourseDetailsPage.js\
+&#x20;       LessonPage.js\
+&#x20;       AssessmentPage.js\
+&#x20;       AdminCoursePage.js
+
+fixtures/\
+&#x20;       test-fixtures.js
+
+utils/\
+&#x20;       testData.js\
+&#x20;       courseHelper.js\
+&#x20;       apiHelper.js
+
+data/\
+&#x20;       users.json\
+&#x20;       courses.json\
+&#x20;       assessments.json
+
+config/\
+&#x20;       environment.js
+
+.github/\
+&#x20;       workflows/\
+&#x20;           playwright.yml
+
+playwright.config.js\
+&#x20;   package.json\
+&#x20;   README.md\
+&#x20;   .gitignore
+
+Folder responsibilities:
+
+- tests/: Contains all automated test cases.
+- pages/: Contains page objects, locators, and reusable page actions.
+- fixtures/: Manages browser setup, authentication, and shared test resources.
+- utils/: Contains reusable helper functions.
+- data/: Stores test users, course details, and assessment information.
+- config/: Stores environment configuration.
+- .github/workflows/: Contains GitHub Actions CI configuration.
+
+## 4. Five Major Application Workflows
+
+### Flow 1: Learner Registration and Login
+
+Objective:
+
+Verify that a new learner can successfully register an account and log in to the EXELYNT application.
+
+Test scenarios:
+
+1. Open the registration page.
+2. Verify that the registration form is visible.
+3. Enter the learner's full name.
+4. Enter a valid email address.
+5. Enter a valid password.
+6. Confirm the password if required.
+7. Accept the terms and conditions if required.
+8. Submit the registration form.
+9. Verify successful registration.
+10. Verify that the learner can log in using the registered credentials.
+11. Verify that invalid login credentials display an appropriate error message.
+12. Verify that required-field validation works correctly.
+
+Expected result:
+
+The learner should be able to register successfully and access the application using valid login credentials. Invalid information should display appropriate validation messages.
+
+### Flow 2: Course Browsing and Enrollment
+
+Objective:
+
+Verify that learners can browse available courses, view course information, and enroll successfully.
+
+Test scenarios:
+
+1. Log in as a learner.
+2. Navigate to the Courses section.
+3. Verify that the course catalog is displayed.
+4. Search for a course using its title.
+5. Verify that the correct course appears.
+6. Open the course details page.
+7. Verify the course title, description, price, and available information.
+8. Click the Enroll button.
+9. Complete the payment process if the course is paid.
+10. Verify successful enrollment.
+11. Navigate to My Learning.
+12. Verify that the enrolled course appears in the learner's learning section.
+
+Expected result:
+
+The learner should be able to browse courses, view course details, and enroll in an available course. Successfully enrolled courses should appear in My Learning.
+
+### Flow 3: Lesson Completion and Progress Tracking
+
+Objective:
+
+Verify that learners can access lessons, complete learning activities, and see accurate course progress.
+
+Test scenarios:
+
+1. Log in as a learner.
+2. Open My Learning.
+3. Select an enrolled course.
+4. Navigate to the course lessons.
+5. Open the first available lesson.
+6. Verify that the lesson content loads correctly.
+7. Complete the lesson activity.
+8. Mark the lesson as completed if required.
+9. Navigate to the next lesson.
+10. Verify that the completed lesson status is saved.
+11. Return to the course overview.
+12. Verify that the course progress percentage is updated.
+
+Expected result:
+
+The application should correctly record lesson completion and update the learner's course progress. The progress shown in My Learning should match the actual completed lessons.
+
+### Flow 4: Assessment and Score Verification
+
+Objective:
+
+Verify that learners can take assessments, submit answers, and view their scores.
+
+Test scenarios:
+
+1. Log in as a learner.
+2. Open an enrolled course.
+3. Navigate to the Assessments section.
+4. Open an available assessment.
+5. Verify the assessment title and instructions.
+6. Select answers for multiple-choice questions.
+7. Complete all required questions.
+8. Submit the assessment.
+9. Verify successful submission.
+10. Verify that the score is displayed.
+11. Verify the correct and incorrect answers if review is available.
+12. Verify that the assessment status is updated.
+
+Expected result:
+
+The assessment should be submitted successfully, and the application should display the correct score and assessment status.
+
+### Flow 5: Admin Course Creation
+
+Objective:
+
+Verify that an administrator can create and save a new course draft.
+
+Test scenarios:
+
+1. Log in using valid administrator credentials.
+2. Navigate to the admin dashboard.
+3. Open the Courses section.
+4. Click the Create Course button.
+5. Enter the course title.
+6. Enter the course description.
+7. Select the course category.
+8. Enter the course price.
+9. Upload a course thumbnail if required.
+10. Enter the required course information.
+11. Save the course as a draft.
+12. Verify that the course is successfully created.
+13. Verify that the course appears in the admin course list.
+14. Verify that the course status is Draft.
+
+Expected result:
+
+The administrator should be able to create and save a course draft successfully. The course should appear in the admin course list with the correct information and draft status.
+
+## 5. Page Object Model Architecture
+
+The framework will use the Page Object Model to separate page interactions from test logic.
+
+Each application page will have its own JavaScript class.
+
+For example:
+
+LoginPage.js
+
+Responsibilities:
+
+- Store login page locators.
+- Enter email and password.
+- Click the login button.
+- Verify login errors.
+- Perform login-related actions.
+
+Example:
+
+&#x20;   class LoginPage&#x20;
